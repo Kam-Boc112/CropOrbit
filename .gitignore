@@ -1,0 +1,9 @@
+# Repozytorium zawiera tylko aplikację: kod Pythona, static/ i konfigurację Codespaces.
+# Dokumentacja (.md), prezentacja, zrzuty, cache i graf kodu zostają lokalnie.
+/*
+!/*.py
+!/static/
+!/.devcontainer/
+!/.gitignore
+*.md
+__pycache__/
