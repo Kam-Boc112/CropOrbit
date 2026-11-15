@@ -2,7 +2,8 @@
   "name": "CropOrbit",
   "image": "mcr.microsoft.com/devcontainers/python:3.12",
   "features": {
-    "ghcr.io/devcontainers/features/sshd:1": { "version": "latest" }
+    "ghcr.io/devcontainers/features/sshd:1": { "version": "latest" },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "containerEnv": { "PORT": "8077", "HOST": "0.0.0.0" },
   "forwardPorts": [8077],
