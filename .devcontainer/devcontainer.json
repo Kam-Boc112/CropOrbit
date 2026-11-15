@@ -10,5 +10,5 @@
     "8077": { "label": "CropOrbit", "onAutoForward": "openBrowser" }
   },
   "postCreateCommand": "python server.py --prefetch || true",
-  "postStartCommand": "git pull --ff-only || true; setsid -f python server.py > /tmp/croporbit.log 2>&1"
+  "postStartCommand": "bash .devcontainer/start.sh"
 }
