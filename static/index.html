@@ -68,15 +68,22 @@
         </details>
       </div>
 
-      <div class="step">
-        <button id="analyzeBtn" class="primary cta" type="submit" data-en="Analyse field">Analizuj pole</button>
-        <div id="status" class="status" role="status" aria-live="polite"></div>
+      <!-- telefon: przycisk na końcu formularza (mapa jest wtedy nad formularzem); komputer: przycisk pod mapą -->
+      <div class="step only-mobile">
+        <button class="primary cta analyze" type="submit" data-en="Analyse field">Analizuj pole</button>
+        <div class="status" role="status" aria-live="polite"></div>
       </div>
     </form>
 
     <div class="card mapcard">
       <div id="map" role="application" aria-label="Mapa: kliknij działkę, aby ją zaznaczyć" data-en-aria-label="Map: click a parcel to select it"></div>
-      <div class="maphint"><span data-en="Click a parcel to select it (further clicks add or deselect parcels). Outside Poland a click marks a point.">Kliknij działkę, by ją zaznaczyć (kolejne kliknięcia dodają lub odznaczają działki). Poza Polską kliknięcie wskazuje punkt.</span><span data-en="Parcel boundaries appear from zoom level 15.">Granice działek widać od przybliżenia 15.</span></div>
+      <div class="maphint">
+        <div class="hints"><span data-en="Click a parcel to select it (further clicks add or deselect parcels). Outside Poland a click marks a point.">Kliknij działkę, by ją zaznaczyć (kolejne kliknięcia dodają lub odznaczają działki). Poza Polską kliknięcie wskazuje punkt.</span><span data-en="Parcel boundaries appear from zoom level 15.">Granice działek widać od przybliżenia 15.</span></div>
+        <div class="map-cta only-desktop">
+          <button class="primary cta analyze" type="submit" form="panel" data-en="Analyse field">Analizuj pole</button>
+          <div class="status" role="status" aria-live="polite"></div>
+        </div>
+      </div>
     </div>
   </section>
 

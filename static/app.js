@@ -37,7 +37,8 @@ const nParcels = (n) => `${n} ${t(n === 1 ? "działka" : n < 5 ? "działki" : "d
 const stratColor = (s) => (s.is_current ? STRAT_COLORS.current : STRAT_COLORS[s.label]);
 const stratShort = (s) => (s.is_current ? t("Ob.", "Now") : s.label);
 const stratName = (s) => (s.is_current ? t("Obecny", "Current") : s.label);
-function status(msg, err = false) { const s = $("#status"); s.textContent = msg; s.classList.toggle("err", err); }
+// dwa przyciski „Analizuj” (pod mapą na komputerze, pod formularzem na telefonie) — widoczny jest zawsze jeden
+function status(msg, err = false) { $$(".status").forEach((s) => { s.textContent = msg; s.classList.toggle("err", err); }); }
 async function getJSON(url, opts) {
   if (url.startsWith("/api/")) url += (url.includes("?") ? "&" : "?") + "lang=" + LANG;
   const r = await fetch(url, opts);
@@ -243,18 +244,19 @@ $("#panel").addEventListener("submit", async (e) => {
     irrigation: $("#irrigation").checked, livestock: $("#livestock").checked, cover_now: $("#coverNow").checked, residues: $("#residues").checked,
     weights: Object.fromEntries(AXES.map(([k]) => [k, +$("#w_" + k).value])),
   };
-  const btn = $("#analyzeBtn"); btn.disabled = true;
+  const btns = $$(".analyze"), label = (txt) => btns.forEach((b) => { b.textContent = txt; });
+  btns.forEach((b) => { b.disabled = true; });
   const t0 = Date.now();
   status(t("Pobieram dane NASA (24 lata), teren, glebę… Pierwsza analiza nowego pola trwa do ok. 40 s.",
     "Downloading NASA data (24 years), terrain and soil… The first analysis of a new field takes up to ~40 s."));
-  const tick = setInterval(() => { btn.textContent = `${t("Analizuję…", "Analysing…")} ${Math.round((Date.now() - t0) / 1000)} s`; }, 1000);
+  const tick = setInterval(() => { label(`${t("Analizuję…", "Analysing…")} ${Math.round((Date.now() - t0) / 1000)} s`); }, 1000);
   try {
     const d = await getJSON("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     status(t(`Gotowe w ${fmt((Date.now() - t0) / 1000)} s. Sprawdzono ${d.n_checked} wariantów płodozmianu.`,
       `Done in ${fmt((Date.now() - t0) / 1000)} s. Checked ${d.n_checked} rotation variants.`));
     state.res = d; showResults(d);
   } catch (err) { status(t("Błąd: ", "Error: ") + err.message, true); }
-  finally { clearInterval(tick); btn.disabled = false; btn.textContent = analyzeLabel; }
+  finally { clearInterval(tick); btns.forEach((b) => { b.disabled = false; }); label(analyzeLabel); }
 });
 
 // ================================================================== zakładki (ARIA, strzałki) i podpowiedzi

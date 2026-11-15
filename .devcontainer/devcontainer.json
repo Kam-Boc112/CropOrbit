@@ -1,11 +1,14 @@
 {
   "name": "CropOrbit",
   "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": { "version": "latest" }
+  },
   "containerEnv": { "PORT": "8077", "HOST": "0.0.0.0" },
   "forwardPorts": [8077],
   "portsAttributes": {
     "8077": { "label": "CropOrbit", "onAutoForward": "openBrowser" }
   },
   "postCreateCommand": "python server.py --prefetch || true",
-  "postStartCommand": "setsid -f python server.py > /tmp/croporbit.log 2>&1"
+  "postStartCommand": "git pull --ff-only || true; setsid -f python server.py > /tmp/croporbit.log 2>&1"
 }
