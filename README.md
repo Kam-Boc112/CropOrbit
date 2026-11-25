@@ -69,8 +69,10 @@ python server.py            # http://localhost:8000
 - Pierwsza analiza nowego pola trwa 30–50 s (pobieranie 24 lat danych), kolejne poniżej 1 s (cache na dysku).
 - Moduł AI: `pip install -r requirements.txt` i zmienna `ANTHROPIC_API_KEY`. Bez niej reszta aplikacji działa normalnie.
 
-**Hosting:** `static/` działa samodzielnie na GitHub Pages jako wersja pokazowa (`.github/workflows/pages.yml`),
-pełna wersja z serwerem — na Render (`render.yaml`) albo w GitHub Codespaces (`.devcontainer/`).
+**Hosting bez serwera:** na GitHub Pages (`.github/workflows/pages.yml`) ten sam kod Pythona działa w przeglądarce —
+w Pyodide (WebAssembly) w Web Workerze (`static/engine.js`). Dane pobiera prosto z NASA POWER, SoilGrids, GUGiK
+i Open-Meteo (teren: Copernicus DEM 90 m, bo OpenTopoData nie przyjmuje zapytań ze stron). Pomija tylko profil NDVI
+i moduł AI. Pełna wersja z serwerem: Render (`render.yaml`) albo GitHub Codespaces (`.devcontainer/`).
 
 ## Jak to zbudowaliśmy
 
