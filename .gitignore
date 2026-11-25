@@ -1,9 +1,15 @@
-# Repozytorium zawiera tylko aplikację: kod Pythona, static/ i konfigurację Codespaces.
-# Dokumentacja (.md), prezentacja, zrzuty, cache i graf kodu zostają lokalnie.
+# Repozytorium zawiera aplikację (kod Pythona, static/ z gotowymi wynikami pól przykładowych w static/demo/),
+# README ze zrzutami (docs/) i konfigurację hostingu: Codespaces, Render, GitHub Pages.
+# Pozostała dokumentacja (.md), prezentacja, cache i graf kodu zostają lokalnie.
 /*
 !/*.py
 !/static/
+!/docs/
 !/.devcontainer/
+!/.github/
+!/render.yaml
+!/requirements.txt
 !/.gitignore
 *.md
+!/README.md
 __pycache__/

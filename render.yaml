@@ -1,0 +1,15 @@
+# Pełna wersja na Render.com (plan darmowy): Dashboard → New → Blueprint → wskaż to repozytorium.
+# Darmowa usługa usypia po ~15 min bez ruchu; pierwsze wejście trwa wtedy ~1 min.
+# Pola przykładowe i tak otwierają się od ręki (gotowe wyniki w static/demo/).
+services:
+  - type: web
+    name: croporbit
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: ANTHROPIC_API_KEY   # opcjonalnie: włącza „Zapytaj o swoje pole”; wpisz w panelu Render
+        sync: false

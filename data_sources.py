@@ -26,12 +26,17 @@ def _get_json(url, timeout=120):
         return json.loads(r.read().decode("utf-8"))
 
 
-def _cached(key, fn):
+COOLDOWN_MSG = "źródło niedostępne (ponowna próba za kilka minut)"
+
+
+def _cached(key, fn, cache_only=False):
     os.makedirs(CACHE_DIR, exist_ok=True)
     path = os.path.join(CACHE_DIR, hashlib.sha1(key.encode()).hexdigest()[:20] + ".json")
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             return json.load(f)
+    if cache_only:  # serwis chwilowo wyłączony po błędzie — bez pliku w cache nie próbujemy sieci
+        raise RuntimeError(COOLDOWN_MSG)
     val = fn()
     with open(path, "w", encoding="utf-8") as f:
         json.dump(val, f)
@@ -114,7 +119,7 @@ def fetch_terrain(lat, lon, step_m=60):
 
 
 # ---------------------------------------------------------------- MODIS NDVI
-def fetch_ndvi(lat, lon, years=(2021, 2022, 2023)):
+def fetch_ndvi(lat, lon, years=(2021, 2022, 2023), cache_only=False):
     """Profil NDVI z MODIS MOD13Q1 (250 m, kompozyty 16-dniowe) przez ORNL DAAC REST."""
     lat, lon = round(lat, 4), round(lon, 4)
 
@@ -144,7 +149,7 @@ def fetch_ndvi(lat, lon, years=(2021, 2022, 2023)):
         prof = [{"doy": d, "ndvi": round(sum(v) / len(v), 3), "n": len(v)} for d, v in sorted(series.items())]
         return {"years": list(years), "profile": prof}
 
-    return _cached(f"ndvi:{lat}:{lon}:{years}", go)
+    return _cached(f"ndvi:{lat}:{lon}:{years}", go, cache_only)
 
 
 def fetch_all(lat, lon):
@@ -155,9 +160,11 @@ def fetch_all(lat, lon):
     now = time.time()
     ex = cf.ThreadPoolExecutor(max_workers=4)
     futs = {}
+    cooling = set()
     for k, fn in tasks.items():
-        if _FAIL_UNTIL.get(k, 0) > now:
-            out[k], errors[k] = None, "źródło niedostępne (ponowna próba za kilka minut)"
+        if _FAIL_UNTIL.get(k, 0) > now:  # tylko NDVI: po błędzie przez 10 min czytamy jedynie cache
+            cooling.add(k)
+            futs[k] = ex.submit(fn, lat, lon, cache_only=True)
         else:
             futs[k] = ex.submit(fn, lat, lon)
     for k, fut in futs.items():
@@ -165,8 +172,8 @@ def fetch_all(lat, lon):
             out[k] = fut.result(timeout=limits[k])
         except Exception as e:  # noqa: BLE001 — każde źródło może zawieść niezależnie
             out[k] = None
-            errors[k] = f"{type(e).__name__}: {e}"[:200] or type(e).__name__
-            if k == "ndvi":
+            errors[k] = COOLDOWN_MSG if k in cooling else (f"{type(e).__name__}: {e}"[:200] or type(e).__name__)
+            if k == "ndvi" and k not in cooling:
                 _FAIL_UNTIL[k] = time.time() + 600
     ex.shutdown(wait=False, cancel_futures=True)
     out["errors"] = errors

@@ -5,10 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CropOrbit — płodozmian z danych NASA</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700;800&display=swap">
+<meta name="description" content="CropOrbit dobiera płodozmian do konkretnej działki z 24 lat dziennych danych NASA, gleby i ewidencji gruntów.">
+<meta name="theme-color" content="#18402a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='7' fill='%232a6a43'/%3E%3Cellipse cx='16' cy='16' rx='14' ry='5.5' fill='none' stroke='%23b08a3e' stroke-width='2.4' transform='rotate(-25 16 16)'/%3E%3C/svg%3E">
+<!-- podgląd linku (LinkedIn, Messenger, formularze) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="CropOrbit — z orbity na Twoje pole">
+<meta property="og:description" content="Płodozmian dopasowany do konkretnej działki z 24 lat dziennych danych NASA. Działka Trzciana 723/1: ocena 46 → 66, goła gleba 3,2 → 0,8 mies./rok.">
+<meta property="og:url" content="https://kam-boc112.github.io/CropOrbit/">
+<meta property="og:image" content="https://kam-boc112.github.io/CropOrbit/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Source+Sans+3:wght@400;600;700;800&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
-<link rel="stylesheet" href="/static/style.css">
+<!-- ścieżki względne: ta sama strona działa z serwerem Pythona i na hostingu statycznym (GitHub Pages) -->
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <!-- Teksty po polsku w treści, angielskie w data-en / data-en-<atrybut>; app.js podmienia je przy języku „en”. -->
@@ -27,6 +38,59 @@
 </header>
 
 <main>
+  <section class="hero" aria-labelledby="heroTitle">
+    <div class="hero-text">
+      <p class="eyebrow" data-en="NASA Space Apps Challenge 2026 · Field Shift">NASA Space Apps Challenge 2026 · Field Shift</p>
+      <h1 id="heroTitle" data-en="From orbit <em>to your field.</em>">Z orbity <em>na Twoje pole.</em></h1>
+      <p class="hero-lead" data-en="The climate on farmland is changing faster than crop rotations do. CropOrbit combines 24 years of daily NASA data, soil data and the land register to fit a crop rotation to one specific parcel, and shows the source of every number.">Klimat na polach zmienia się szybciej niż płodozmiany. CropOrbit łączy 24 lata dziennych danych NASA, dane o glebie i ewidencję gruntów, żeby dobrać płodozmian do konkretnej działki. Przy każdej liczbie pokazuje, skąd ją wziął.</p>
+      <div class="hero-cta">
+        <button type="button" class="primary" id="heroDemo" data-en="See an example: parcel Trzciana 723/1">Zobacz przykład: działka Trzciana 723/1</button>
+        <a class="btn" href="#toolTitle" data-en="Analyse your own field ↓">Przeanalizuj swoje pole ↓</a>
+      </div>
+      <p id="staticNote" class="static-note" hidden></p>
+    </div>
+    <div class="hero-card" id="heroCard">
+      <dl class="hero-stats" id="heroStats" aria-label="Wynik dla działki Trzciana 723/1" data-en-aria-label="Result for parcel Trzciana 723/1"></dl>
+      <div class="hero-year" id="heroYear"></div>
+    </div>
+  </section>
+
+  <section class="sources" aria-label="Źródła danych i metody" data-en-aria-label="Data sources and methods">
+    <span class="src-label" data-en="Data">Dane</span>
+    <span class="src nasa">NASA POWER</span><span class="src nasa">NASA SRTM</span><span class="src nasa">NASA MODIS</span>
+    <span class="src">ISRIC SoilGrids</span><span class="src">GUGiK · EGiB</span>
+    <span class="src-label" data-en="Methods">Metody</span>
+    <span class="src m">FAO‑56</span><span class="src m">FAO Ecocrop</span><span class="src m">RUSLE</span><span class="src m">VDLUFA</span>
+  </section>
+
+  <section class="why" aria-labelledby="whyTitle">
+    <div class="why-text">
+      <p class="eyebrow" data-en="The problem">Problem</p>
+      <h2 id="whyTitle" class="section-title" data-en="The field is drying out. <em>The rotation stays the same.</em>">Pole wysycha. <em>Płodozmian zostaje ten sam.</em></h2>
+      <p class="section-lead" data-en="A farmer sees one season at a time. 24 years of daily NASA data show the trend: less water in the season and more hot days. Many farms still sow mostly cereals, which leaves bare soil and depletes humus.">Rolnik widzi jeden sezon naraz. 24 lata dziennych danych NASA pokazują trend: coraz mniej wody w sezonie i coraz więcej upałów. Wiele gospodarstw wciąż sieje głównie zboża, co zostawia gołą glebę i zużywa próchnicę.</p>
+      <div class="why-facts" id="whyFacts"></div>
+    </div>
+    <figure class="card why-chart">
+      <figcaption id="whyCap"></figcaption>
+      <div id="whySvg"></div>
+    </figure>
+  </section>
+
+  <section class="how" aria-labelledby="howTitle">
+    <p class="eyebrow" data-en="How it works">Jak to działa</p>
+    <h2 id="howTitle" class="section-title" data-en="Three steps, <em>one minute.</em>">Trzy kroki, <em>jedna minuta.</em></h2>
+    <ol class="how-steps">
+      <li><span class="how-n">01</span><h3 data-en="Point to the field">Wskaż pole</h3>
+        <p data-en="Type the parcel number from the land register or click it on the map. We pull the boundaries, area and soil classes.">Wpisz numer działki z ewidencji albo kliknij ją na mapie. Pobieramy granice, powierzchnię i klasy gruntu.</p></li>
+      <li><span class="how-n">02</span><h3 data-en="We read 24 years from orbit">Czytamy 24 lata z orbity</h3>
+        <p data-en="Daily NASA data since 2001: heat, frost, rainfall, evaporation, soil moisture, plus terrain and soil. Frost “1 year in 10”, drought, erosion.">Dzienne dane NASA od 2001 r.: ciepło, przymrozki, opad, parowanie, wilgotność gleby, do tego teren i gleba. Przymrozek „1 rok na 10”, susza, erozja.</p></li>
+      <li><span class="how-n">03</span><h3 data-en="A rotation with evidence">Płodozmian z dowodami</h3>
+        <p data-en="We score 20 crops and check thousands of rotations against agronomic rules. Each recommendation says why, what it gains, what it risks and the source of every number.">Oceniamy 20 upraw i sprawdzamy tysiące płodozmianów zgodnych z regułami agronomii. Każda rekomendacja mówi: dlaczego, co zyskasz, czym ryzykujesz i skąd jest każda liczba.</p></li>
+    </ol>
+  </section>
+
+  <h2 class="section-title tool-title" id="toolTitle" data-en="Check <em>your field.</em>">Sprawdź <em>swoje pole.</em></h2>
+
   <section class="setup" aria-label="Wybór pola i ustawienia" data-en-aria-label="Field selection and settings">
     <form id="panel" class="card panel" novalidate>
       <div class="step">
@@ -90,6 +154,7 @@
   <section id="results" class="results hidden" aria-labelledby="resTitle">
     <h2 id="resTitle" data-en="Results for your field">Wyniki dla Twojego pola</h2>
     <div id="summary" class="summary"></div>
+    <section id="ask" class="card ask" aria-labelledby="askTitle"></section>
     <div role="tablist" class="tabs" aria-label="Sekcje wyników" data-en-aria-label="Result sections">
       <button role="tab" id="t-conditions" aria-controls="tab-conditions" aria-selected="true" data-en="Conditions">Warunki</button>
       <button role="tab" id="t-crops" aria-controls="tab-crops" aria-selected="false" tabindex="-1" data-en="Crops">Uprawy</button>
@@ -106,12 +171,25 @@
   </section>
 </main>
 
-<footer data-en="CropOrbit · NASA Space Apps Challenge 2026 · Data: NASA POWER, SRTM, MODIS, ISRIC SoilGrids, GUGiK (ULDK, EGiB). Map: © OpenStreetMap, Esri.">CropOrbit · NASA Space Apps Challenge 2026 · Dane: NASA POWER, SRTM, MODIS, ISRIC SoilGrids, GUGiK (ULDK, EGiB). Mapa: © OpenStreetMap, Esri.</footer>
+<footer class="site-foot">
+  <div class="foot-brand">
+    <b>CropOrbit</b>
+    <span data-en="From orbit to your field.">Z orbity na Twoje pole.</span>
+  </div>
+  <div class="foot-team">
+    <span class="foot-k" data-en="Team RPCAM · NASA Space Apps Challenge 2026, Rzeszów">Zespół RPCAM · NASA Space Apps Challenge 2026, Rzeszów</span>
+    <span>Kamil Bochnowski · Dominik Pruchnik · Karolina Furmanek · Martyna Mróz · Hubert Zając</span>
+  </div>
+  <div class="foot-links">
+    <a id="repoLink" href="https://github.com/Kam-Boc112/CropOrbit" data-en="Source code on GitHub">Kod źródłowy na GitHubie</a>
+  </div>
+  <p class="foot-legal" data-en="Data: NASA POWER, SRTM, MODIS, ISRIC SoilGrids, GUGiK (ULDK, EGiB). Map: © OpenStreetMap, Esri. The tool supports, not replaces, the farmer and the adviser.">Dane: NASA POWER, SRTM, MODIS, ISRIC SoilGrids, GUGiK (ULDK, EGiB). Mapa: © OpenStreetMap, Esri. Narzędzie wspiera, a nie zastępuje rolnika i doradcę.</p>
+</footer>
 
 <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
-<script src="/static/app.js" defer></script>
+<script src="app.js" defer></script>
 </body>
 </html>

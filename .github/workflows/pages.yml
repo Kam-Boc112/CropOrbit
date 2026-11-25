@@ -1,0 +1,33 @@
+# Wersja pokazowa na GitHub Pages: sam folder static/ (bez serwera Pythona).
+# Pola przykładowe działają od ręki z gotowych wyników w static/demo/; własne pole wymaga pełnej wersji.
+# Włączenie: Settings → Pages → Source: GitHub Actions (repozytorium musi być publiczne na darmowym planie).
+name: Demo na GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: static
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -3,7 +3,11 @@
 "use strict";
 
 const LANG_KEY = "croporbit-lang", RESTORE_KEY = "croporbit-restore";
-const LANG = (() => { try { return localStorage.getItem(LANG_KEY) === "pl" ? "pl" : "en"; } catch { return "en"; } })();
+const LANG = (() => {
+  const q = new URLSearchParams(location.search).get("lang"); // ?lang=pl w linku ma pierwszeństwo
+  if (q === "pl" || q === "en") return q;
+  try { return localStorage.getItem(LANG_KEY) === "pl" ? "pl" : "en"; } catch { return "en"; }
+})();
 const t = (pl, en) => (LANG === "pl" ? pl : en);
 
 const AXES = [
@@ -24,7 +28,14 @@ const CROP_COLORS = {
 const PL = [48.9, 55.0, 14.0, 24.2];
 const STATE_TXT = { good: t("dobrze", "good"), warn: t("uwaga", "caution"), bad: t("ryzyko", "risk") };
 
-const state = { point: null, drawnArea: null, parcels: new Map(), rotation: ["wheat_w", "maize_g", "wheat_w"], crops: [], res: null };
+const state = { point: null, drawnArea: null, parcels: new Map(), rotation: ["wheat_w", "maize_g", "wheat_w"], crops: [], res: null, demos: [], demoId: null };
+// Tryb statyczny: brak serwera Pythona (np. GitHub Pages) — działają pola przykładowe z gotowych wyników w demo/.
+let STATIC = false;
+async function snap(name) {
+  const r = await fetch("demo/" + name);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
 const charts = {};
 const rendered = new Set();
 const $ = (s, el = document) => el.querySelector(s);
@@ -60,6 +71,7 @@ function applyStaticLang() {
     b.onclick = () => switchLang(b.dataset.lang);
   });
 }
+function localStorageOk() { try { return localStorage.getItem(LANG_KEY) !== null; } catch { return false; } }
 function switchLang(lang) {
   if (lang === LANG) return;
   try {
@@ -67,12 +79,16 @@ function switchLang(lang) {
     const c = map.getCenter();
     sessionStorage.setItem(RESTORE_KEY, JSON.stringify({
       view: [c.lat, c.lng, map.getZoom()], point: state.point, drawnArea: state.drawnArea,
-      parcels: [...state.parcels.keys()], rotation: state.rotation, analyzed: !!state.res,
+      parcels: [...state.parcels.keys()], rotation: state.rotation, analyzed: !!state.res, demoId: state.demoId,
       checks: Object.fromEntries(["newField", "irrigation", "livestock", "coverNow", "residues"].map((id) => [id, $("#" + id).checked])),
       weights: Object.fromEntries(AXES.map(([k]) => [k, $("#w_" + k).value])),
     }));
   } catch { /* bez pamięci przeglądarki zmiana języka zaczyna od pustego formularza */ }
-  location.reload();
+  // ?lang= i ?demo= z linku miałyby pierwszeństwo przed wyborem użytkownika — usuwamy je z adresu
+  const u = new URL(location.href);
+  u.searchParams.delete("lang"); u.searchParams.delete("demo");
+  if (!localStorageOk()) u.searchParams.set("lang", lang);
+  location.replace(u.toString());
 }
 applyStaticLang();
 
@@ -235,6 +251,11 @@ $("#livestock").onchange = (e) => { if (e.target.checked && $("#w_pasza").value 
 const analyzeLabel = t("Analizuj pole", "Analyse field");
 $("#panel").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (STATIC) {
+    status(t("To wersja pokazowa bez serwera: działają pola przykładowe. Analiza własnego pola wymaga pełnej wersji (python server.py).",
+      "This is the demo version without a server: the example fields work. Analysing your own field needs the full version (python server.py)."), true);
+    return;
+  }
   const g = fieldGeom();
   if (!g) { status(t("Najpierw wskaż pole na mapie albo wyszukaj działkę.", "First mark the field on the map or search for a parcel."), true); return $("#searchInput").focus(); }
   const newField = $("#newField").checked;
@@ -254,7 +275,7 @@ $("#panel").addEventListener("submit", async (e) => {
     const d = await getJSON("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     status(t(`Gotowe w ${fmt((Date.now() - t0) / 1000)} s. Sprawdzono ${d.n_checked} wariantów płodozmianu.`,
       `Done in ${fmt((Date.now() - t0) / 1000)} s. Checked ${d.n_checked} rotation variants.`));
-    state.res = d; showResults(d);
+    state.res = d; state.demoId = null; showResults(d);
   } catch (err) { status(t("Błąd: ", "Error: ") + err.message, true); }
   finally { clearInterval(tick); btns.forEach((b) => { b.disabled = false; }); label(analyzeLabel); }
 });
@@ -311,15 +332,16 @@ const mix = (a, b, k) => { k = Math.max(0, Math.min(1, k)); const p = (h) => [1,
 const sgn = (v) => (v > 0 ? "+" : "");
 
 // ================================================================== wyniki
-function showResults(res) {
+function showResults(res, scroll = true) {
   Object.values(charts).forEach((c) => c.destroy());
   Object.keys(charts).forEach((k) => delete charts[k]);
   rendered.clear();
   tabs.forEach((x) => { $("#" + x.getAttribute("aria-controls")).innerHTML = ""; });
   renderSummary(res);
+  renderAsk(res);
   $("#results").classList.remove("hidden");
   selectTab(tabs[0]);
-  $("#results").scrollIntoView({ block: "start" });
+  if (scroll) $("#results").scrollIntoView({ block: "start" });
 }
 
 const bestStrategy = (res) => res.new_field ? res.strategies[0] : res.strategies.slice(1).sort((a, b) => b.total - a.total)[0];
@@ -332,15 +354,63 @@ function renderSummary(res) {
   const top = res.ranking[0], ps = res.parcels;
   const worst = res.tiles.find((x) => x.status === "bad") || res.tiles.find((x) => x.status === "warn");
   const where = ps?.n ? nParcels(ps.n) : `${res.field.lat.toFixed(3)}, ${res.field.lon.toFixed(3)}`;
-  const card = (k, v, d) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
+  const card = (k, v, d, cls = "") => `<div class="card ${cls}"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
+  // główna odpowiedź: rekomendowany płodozmian, wyróżniony i szerszy niż karty pomocnicze
+  const signed = (v, d) => (v > 0 ? "+" : "") + fmt(v, d);
+  const gain = (k, unit, d = 1, sign = false) => { const f = sign ? signed : fmt; return `${f(cur.metrics[k], d)} → <b>${f(best.metrics[k], d)}</b> ${unit}`; };
+  const hero = !best ? "" : `<div class="card hl"><div class="k">${res.new_field ? t("Proponowany płodozmian", "Proposed rotation") : t("Co polecamy", "Our recommendation")}</div>
+    <div class="v">${esc(best.names.join(" → "))}${best.cover_type ? ` <span class="plus">+ ${t("międzyplony", "cover crops")}</span>` : ""}</div>
+    <div class="d">${res.new_field ? `${t("ocena", "score")} ${best.total}/100`
+      : `${t("ocena", "score")} ${cur.total} → <b>${best.total}</b> · ${t("goła gleba", "bare soil")} ${gain("bare_months", t("mies./rok", "months/yr"))} · ${t("próchnica", "humus")} ${gain("humus_kg_c", t("kg C/ha/rok", "kg C/ha/yr"), 0, true)}`}</div></div>`;
   $("#summary").innerHTML = [
+    hero,
     card(t("Pole", "Field"), esc(where), `${res.field.area_ha ? fmt(res.field.area_ha, 2) + " ha · " : ""}${res.field.elev ?? "?"} ${t("m n.p.m.", "m a.s.l.")}${ps?.best ? ` · ${t("klasa", "class")} ${esc(ps.best.cls)}${ps.worst && ps.worst.cls !== ps.best.cls ? "–" + esc(ps.worst.cls) : ""}` : ""}`),
     card(t("Najlepiej pasuje", "Best fit"), esc(top.name), `${t("ocena", "score")} ${top.score}/100`),
-    res.new_field ? card(t("Proponowany płodozmian", "Proposed rotation"), `${best.label}: ${best.total} ${pts}`, esc(best.names.join(" → ")))
-      : best ? card(t("Najlepsza alternatywa", "Best alternative"), `${best.label}: ${best.total} ${pts}`, `${t("obecny płodozmian", "current rotation")}: ${cur.total} ${pts}`) : "",
     en ? card(t("Najwięcej energii", "Most food energy"), esc(en.name), `${mkcal(en.kcal_ha)} ${t("mln kcal/ha", "M kcal/ha")} · ≈ ${fmt(en.persons_ha)} ${t("os./rok z 1 ha", "people/yr per ha")}`) : "",
     worst ? card(t("Na co uważać", "Watch out for"), esc(worst.title), esc(worst.value)) : card(t("Na co uważać", "Watch out for"), t("brak wyraźnych ryzyk", "no clear risks"), ""),
   ].join("");
+}
+
+// ---------------------------------------------------------- „Zapytaj o swoje pole” (Claude, tylko z liczb analizy)
+function renderAsk(res) {
+  const el = $("#ask"), st = state.aiStatus;
+  const off = st !== "ok";
+  const why = st === "static" ? t("W wersji pokazowej bez serwera pytania są wyłączone — działają w pełnej wersji.", "Questions are off in the demo version without a server — they work in the full version.")
+    : st === "no_key" ? t("Moduł wyłączony: ustaw klucz ANTHROPIC_API_KEY i uruchom serwer ponownie.", "Module off: set the ANTHROPIC_API_KEY key and restart the server.")
+    : st === "no_sdk" ? t("Moduł wyłączony: zainstaluj SDK (pip install anthropic).", "Module off: install the SDK (pip install anthropic).") : "";
+  const best = bestStrategy(res), worst = res.tiles.find((x) => x.status === "bad") || res.tiles.find((x) => x.status === "warn");
+  const sugg = [
+    best && t(`Dlaczego polecacie płodozmian ${best.label}?`, `Why do you recommend rotation ${best.label}?`),
+    worst && t(`Co oznacza „${worst.title}” dla mojego pola?`, `What does “${worst.title}” mean for my field?`),
+    t("Czego ta analiza nie wie o moim polu?", "What does this analysis not know about my field?"),
+  ].filter(Boolean);
+  el.innerHTML = `<div class="ask-head"><h3 id="askTitle">${t("Zapytaj o swoje pole", "Ask about your field")} <span class="badge">AI</span></h3>
+      <p class="small muted">${t("Odpowiada Claude, ale tylko z liczb policzonych powyżej — z nazwą wskaźnika i źródłem. Czego nie ma w danych, mówi wprost.",
+        "Claude answers, but only from the numbers computed above — naming the indicator and source. If something is not in the data, it says so.")}</p></div>
+    <form class="ask-form" novalidate>
+      <label for="askInput" class="sr-only">${t("Twoje pytanie", "Your question")}</label>
+      <input id="askInput" type="text" maxlength="500" autocomplete="off" ${off ? "disabled" : ""}
+        placeholder="${t("np. Czy mogę siać kukurydzę na tym polu?", "e.g. Can I grow maize on this field?")}">
+      <button type="submit" class="primary" ${off ? "disabled" : ""}>${t("Zapytaj", "Ask")}</button>
+    </form>
+    <div class="ask-sugg">${sugg.map((q) => `<button type="button" class="chip-btn" ${off ? "disabled" : ""}>${esc(q)}</button>`).join("")}</div>
+    ${off ? `<p class="small ask-off">${why}</p>` : ""}
+    <div class="ask-out" aria-live="polite"></div>`;
+  if (off) return;
+  const out = $(".ask-out", el), input = $("#askInput", el), btns = $$("button", el);
+  const send = async (q) => {
+    q = q.trim(); if (!q) return input.focus();
+    btns.forEach((b) => { b.disabled = true; }); input.disabled = true;
+    out.innerHTML = `<p class="muted small">${t("Claude czyta wyniki analizy…", "Claude is reading the analysis results…")}</p>`;
+    try {
+      const d = await getJSON("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q, result: res }) });
+      out.innerHTML = `<div class="qa"><p class="q">${esc(q)}</p><div class="a">${esc(d.answer).replace(/\n/g, "<br>")}</div>
+        <p class="note">${t("Odpowiedź modelu językowego na podstawie liczb z tej analizy — sprawdź ważne decyzje z doradcą.", "A language model's answer based on the numbers from this analysis — check important decisions with an adviser.")}${d.truncated ? t(" (odpowiedź ucięta)", " (answer cut off)") : ""}</p></div>`;
+    } catch (err) { out.innerHTML = `<p class="status err">${esc(err.message)}</p>`; }
+    finally { btns.forEach((b) => { b.disabled = false; }); input.disabled = false; }
+  };
+  $(".ask-form", el).onsubmit = (e) => { e.preventDefault(); send(input.value); };
+  $$(".chip-btn", el).forEach((b) => b.onclick = () => { input.value = b.textContent; send(b.textContent); });
 }
 
 function renderConditions(res) {
@@ -578,21 +648,122 @@ async function restoreAfterLangSwitch() {
     for (const id of r.parcels) { try { addParcel(await getJSON("/api/parcel?id=" + encodeURIComponent(id))); } catch { /* działka niedostępna */ } }
     status("");
   } else if (r.point) setPoint(r.point.lat, r.point.lon, r.drawnArea); // shortcut: narysowany obrys wraca jako punkt z powierzchnią
+  const demo = r.demoId && state.demos.find((d) => d.id === r.demoId);
+  if (demo) return openDemo(demo, { scroll: false });
   if (r.analyzed && fieldGeom()) $("#panel").requestSubmit();
+}
+
+// ---------------------------------------------------------- pola przykładowe: gotowe wyniki od ręki
+function resetForm() {
+  $("#newField").checked = false; $("#newField").dispatchEvent(new Event("change"));
+  ["irrigation", "livestock", "coverNow"].forEach((id) => { $("#" + id).checked = false; });
+  $("#residues").checked = true;
+  AXES.forEach(([k, , v]) => { $("#w_" + k).value = v; $("#o_" + k).textContent = v; });
+}
+async function openDemo(d, { scroll = true } = {}) {
+  clearSelection(); resetForm();
+  state.rotation = [...d.rotation]; renderChips();
+  let ps = [];
+  if (d.parcels?.length) { try { ps = await snap(`parcels_${d.id}.json`); } catch { /* bez obrysu — pokażemy punkt */ } }
+  if (ps.length) ps.forEach((p) => addParcel(p, { fit: true }));
+  else { map.setView([d.lat, d.lon], 14); setPoint(d.lat, d.lon); }
+  try {
+    const res = await snap(`${d.id}.${LANG}.json`);
+    state.res = res; state.demoId = d.id;
+    status(t(`Przykład: ${d.name}. Wynik zapisany wcześniej — ta sama analiza co na żywo (${res.n_checked} wariantów płodozmianu).`,
+      `Example: ${d.name}. Saved result — the same analysis as live (${res.n_checked} rotation variants).`));
+    showResults(res, scroll);
+  } catch {
+    if (!STATIC) $("#panel").requestSubmit();
+    else status(t("Nie udało się wczytać przykładu.", "Could not load the example."), true);
+  }
+}
+
+// liczby na pierwszym ekranie liczone z zapisanego wyniku działki przykładowej (nie wpisane na sztywno)
+async function renderHeroStats() {
+  const box = $("#heroStats");
+  try {
+    const res = await snap(`trzciana.${LANG}.json`), cur = res.strategies[0], best = bestStrategy(res);
+    const m = (k, d = 1) => [fmt(cur.metrics[k], d), fmt(best.metrics[k], d)];
+    const row = (label, [a, b], unit) => `<div><dt>${label}</dt><dd><span class="from">${a}</span> → <b>${b}</b> <small>${unit}</small></dd></div>`;
+    box.innerHTML = `<p class="stats-title">${t("Działka Trzciana 723/1 · obecny płodozmian → propozycja", "Parcel Trzciana 723/1 · current rotation → proposal")} ${best.label}</p>
+      ${row(t("Ocena płodozmianu", "Rotation score"), [cur.total, best.total], "/100")}
+      ${row(t("Goła gleba", "Bare soil"), m("bare_months"), t("mies./rok", "months/yr"))}
+      ${row(t("Bilans próchnicy", "Humus balance"), [cur.metrics.humus_kg_c, best.metrics.humus_kg_c].map((v) => (v > 0 ? "+" : "") + fmt(v, 0)), t("kg C/ha/rok", "kg C/ha/yr"))}
+      ${row(t("Udział zbóż", "Cereal share"), m("cereal_share", 0), "%")}
+      <p class="stats-foot">${t(`Sprawdzono ${res.n_checked} wariantów · dane NASA ${res.climate.ind.period}`, `${res.n_checked} variants checked · NASA data ${res.climate.ind.period}`)}</p>`;
+    renderHeroYear(res, cur, best);
+  } catch { box.hidden = true; }
+}
+
+// pasek 12 miesięcy: kiedy gleba jest goła — obecny płodozmian vs propozycja (pierwszy rok kalendarza)
+function renderHeroYear(res, cur, best) {
+  const months = res.climate.monthly.labels;
+  const cell = (c) => c === "bare" ? `<i class="yb bare" title="${t("goła gleba", "bare soil")}"></i>`
+    : c === "cover" ? `<i class="yb cover" title="${t("międzyplon", "cover crop")}"></i>`
+    : `<i class="yb" style="background:${CROP_COLORS[c.slice(5)] || "#999"}" title="${esc(res.crop_names[c.slice(5)] || "")}"></i>`;
+  const bare = (s) => s.calendar[0].filter((c) => c === "bare").length;
+  const row = (label, s) => `<div class="yr"><span class="yl">${label}</span><div class="ycells">${s.calendar[0].map(cell).join("")}</div><span class="yn">${bare(s)} ${t("mies.", "mo")}</span></div>`;
+  $("#heroYear").innerHTML = `<p class="stats-title">${t("Pierwszy rok płodozmianu — kiedy gleba leży goła", "First year of the rotation — when the soil lies bare")}</p>
+    <div class="yr ym"><span class="yl"></span><div class="ycells">${months.map((m) => `<span>${esc(m.slice(0, 1))}</span>`).join("")}</div><span class="yn"></span></div>
+    ${row(t("Obecny", "Current"), cur)}${row(t("Propozycja", "Proposal") + " " + best.label, best)}
+    <p class="ylegend"><span><i class="yb bare"></i>${t("goła gleba", "bare soil")}</span><span><i class="yb cover"></i>${t("międzyplon", "cover crop")}</span><span><i class="yb crop"></i>${t("uprawa", "crop")}</span></p>`;
+}
+
+// sekcja „Problem”: bilans wodny sezonu rok po roku i trend — z zapisanej analizy pola pod Rzeszowem
+async function renderWhy() {
+  try {
+    const res = await snap(`rzeszow.${LANG}.json`), y = res.climate.yearly, ind = res.climate.ind;
+    const W = 560, H = 230, pad = { l: 40, r: 12, t: 14, b: 26 };
+    const vals = y.season_balance, n = vals.length;
+    const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+    const X = (i) => pad.l + (i + 0.5) * (W - pad.l - pad.r) / n, Y = (v) => pad.t + (hi - v) * (H - pad.t - pad.b) / (hi - lo || 1);
+    const bw = (W - pad.l - pad.r) / n * 0.68, fit = linFit(y.years, vals);
+    const ticks = [lo, 0, hi].map((v) => Math.round(v / 50) * 50).filter((v, i, a) => a.indexOf(v) === i);
+    $("#whySvg").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t(`Bilans wodny sezonu IV–IX w latach ${ind.period}; trend ${ind.season_trend_dec} mm na dekadę`, `Season water balance Apr–Sep in ${ind.period}; trend ${ind.season_trend_dec} mm per decade`))}">
+      ${ticks.map((v) => `<line x1="${pad.l}" x2="${W - pad.r}" y1="${Y(v)}" y2="${Y(v)}" class="gl${v === 0 ? " zero" : ""}"/><text x="${pad.l - 6}" y="${Y(v) + 4}" class="tk" text-anchor="end">${v}</text>`).join("")}
+      ${vals.map((v, i) => `<rect x="${X(i) - bw / 2}" y="${Math.min(Y(v), Y(0))}" width="${bw}" height="${Math.max(1, Math.abs(Y(v) - Y(0)))}" rx="2" class="${v < 0 ? "neg" : "pos"}"><title>${y.years[i]}: ${sgn(v)}${Math.round(v)} mm</title></rect>`).join("")}
+      <line x1="${X(0)}" y1="${Y(fit(y.years[0]))}" x2="${X(n - 1)}" y2="${Y(fit(y.years[n - 1]))}" class="trend"/>
+      <text x="${X(0)}" y="${H - 6}" class="tk" text-anchor="middle">${y.years[0]}</text><text x="${X(n - 1)}" y="${H - 6}" class="tk" text-anchor="middle">${y.years[n - 1]}</text>
+    </svg>`;
+    $("#whyCap").innerHTML = `<b>${t("Pole pod Rzeszowem", "Field near Rzeszów")}</b> · ${t("opad minus parowanie w sezonie IV–IX, mm", "rainfall minus evaporation, Apr–Sep, mm")} · NASA POWER ${esc(ind.period)}`;
+    const fact = (big, unit, txt) => `<div class="fact"><b>${big}</b><span class="fu">${unit}</span><p>${txt}</p></div>`;
+    $("#whyFacts").innerHTML = [
+      fact(`${sgn(ind.season_trend_dec)}${fmt(ind.season_trend_dec, 0)}`, t("mm / dekadę", "mm / decade"), t("tyle wody ubywa w sezonie wegetacyjnym", "less water in the growing season each decade")),
+      fact(`${fmt(ind.heat_days_early, 0)} → ${fmt(ind.heat_days_recent, 0)}`, t("dni ≥ 30 °C / rok", "days ≥ 30 °C / yr"), t("dni upalnych na początku i na końcu okresu", "hot days at the start and end of the period")),
+      fact("24", t("lata danych dziennych", "years of daily data"), t("ponad 8700 dni pomiarów dla jednego punktu", "over 8,700 days of data for one point")),
+    ].join("");
+  } catch { $(".why")?.setAttribute("hidden", ""); }
 }
 
 (async function init() {
   renderField();
-  state.crops = await getJSON("/api/crops");
+  try {
+    state.crops = await getJSON("/api/crops");
+    state.demos = await getJSON("/api/demo");
+    state.aiStatus = (await getJSON("/api/ai").catch(() => ({}))).status || "no_sdk";
+  } catch {
+    STATIC = true; state.aiStatus = "static";
+    state.crops = await snap(`crops.${LANG}.json`);
+    state.demos = await snap(`demo.${LANG}.json`);
+    const note = $("#staticNote");
+    note.hidden = false;
+    note.textContent = t("Wersja pokazowa: pola przykładowe otwierają się od razu. Własne pole policzysz w pełnej wersji (python server.py).",
+      "Demo version: the example fields open instantly. Your own field is analysed in the full version (python server.py).");
+  }
   $("#cropSelect").innerHTML = state.crops.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
   renderChips();
-  const demos = await getJSON("/api/demo");
-  $("#demoBtns").innerHTML = demos.map((d, i) => `<button type="button" data-i="${i}">${esc(d.name.split(" (")[0])}</button>`).join(" ");
-  $$("#demoBtns button").forEach((b) => b.onclick = () => {
-    const d = demos[+b.dataset.i];
-    map.setView([d.lat, d.lon], 14); setPoint(d.lat, d.lon);
-    state.rotation = [...d.rotation]; renderChips();
-    $("#panel").requestSubmit();
-  });
+  $("#demoBtns").innerHTML = state.demos.map((d, i) => `<button type="button" data-i="${i}">${esc(d.name.split(" (")[0])}</button>`).join(" ");
+  $$("#demoBtns button").forEach((b) => b.onclick = () => openDemo(state.demos[+b.dataset.i]));
+  $("#heroDemo").onclick = () => openDemo(state.demos.find((d) => d.id === "trzciana") || state.demos[0]);
+  renderHeroStats();
+  renderWhy();
+  // link bezpośrednio do wyniku przykładu, np. ?demo=trzciana (do README i zgłoszeń)
+  const linked = state.demos.find((d) => d.id === new URLSearchParams(location.search).get("demo"));
+  if (linked && !sessionStorage.getItem(RESTORE_KEY)) {
+    await openDemo(linked, { scroll: false });
+    $("#results").scrollIntoView({ block: "start", behavior: "instant" });
+    return;
+  }
   await restoreAfterLangSwitch();
 })();

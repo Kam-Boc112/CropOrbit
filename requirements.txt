@@ -1,0 +1,3 @@
+# Rdzeń CropOrbit działa na samej bibliotece standardowej Pythona (≥ 3.9).
+# Ten pakiet jest potrzebny tylko do modułu „Zapytaj o swoje pole” (Claude API, klucz w ANTHROPIC_API_KEY).
+anthropic>=2.8
