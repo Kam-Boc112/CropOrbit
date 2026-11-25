@@ -1,0 +1,57 @@
+# Po hackathonie (6.12.2026) repozytorium przechodzi na prywatne. Na darmowym planie wyłącza to też GitHub Pages,
+# więc demo przestaje być publicznie dostępne.
+#
+# Wymaga sekretu VISIBILITY_TOKEN: fine-grained personal access token tylko do tego repozytorium,
+# uprawnienie „Administration: Read and write” (wbudowany GITHUB_TOKEN nie może zmieniać widoczności).
+#
+# Test bez zmian: Actions → „Ukryj po hackathonie” → Run workflow (dry_run = true) sprawdza, czy token ma dostęp.
+name: Ukryj po hackathonie
+
+on:
+  schedule:
+    - cron: "0 1 7 12 *"   # 7 grudnia, 01:00 UTC = 02:00 w Polsce
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Tylko sprawdź token, nic nie zmieniaj"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  make-private:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sprawdź token i datę
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.VISIBILITY_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then echo "::error::Brak sekretu VISIBILITY_TOKEN"; exit 1; fi
+          admin=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO" | jq -r '.permissions.admin')
+          echo "Token ma uprawnienia administratora: $admin"
+          if [ "$admin" != "true" ]; then echo "::error::Token nie ma uprawnienia Administration (write)"; exit 1; fi
+          # tylko w 2026 roku i nie wcześniej niż 7 grudnia (cron powtarza się co roku)
+          today=$(date -u +%Y%m%d)
+          if [ "$EVENT" = "schedule" ] && [ "$today" -ge 20261207 ] && [ "$today" -lt 20270101 ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = "workflow_dispatch" ] && [ "$DRY_RUN" = "false" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Test na sucho / poza terminem — nic nie zmieniam."
+          fi
+
+      - name: Przełącz repozytorium na prywatne
+        if: steps.check.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.VISIBILITY_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          curl -fsS -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO" -d '{"visibility":"private"}' | jq -r '"Widoczność: " + .visibility'
