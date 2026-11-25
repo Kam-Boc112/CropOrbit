@@ -62,8 +62,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--green); }
 .brand { display: flex; gap: var(--s3); align-items: center; }
 .brand b { font-size: var(--fs-lg); display: block; }
 .brand span { color: var(--muted); font-size: var(--fs-sm); }
-.demo { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--muted); }
-.demo button { font-size: var(--fs-sm); min-height: 36px; padding: var(--s1) var(--s3); }
+.demo { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--muted); margin-top: var(--s4); }
+.demo button { font-size: var(--fs-sm); min-height: 36px; padding: var(--s1) var(--s3); border-radius: 999px; background: transparent; }
 .top-right { display: flex; gap: var(--s4); align-items: center; flex-wrap: wrap; }
 /* przełącznik języka EN | PL — segmentowy, aktywny w zieleni */
 .lang { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; background: var(--paper); }
@@ -139,6 +139,33 @@ main { max-width: 1360px; margin: 0 auto; padding: var(--s5) var(--s6) var(--s8)
 .how-steps h3 { font-family: var(--serif); font-weight: 500; font-size: 22px; color: var(--green-900); margin: var(--s3) 0 var(--s2); }
 .how-steps p { font-size: var(--fs-sm); color: var(--muted); }
 .tool-title { margin: 0 0 var(--s5); scroll-margin-top: var(--s4); }
+
+/* ---------- nawigacja w nagłówku */
+.topnav { display: flex; gap: var(--s5); font-size: var(--fs-sm); font-weight: 600; }
+.topnav a { color: var(--muted); text-decoration: none; padding: var(--s2) 0; }
+.topnav a:hover { color: var(--green-900); box-shadow: inset 0 -2px 0 var(--green); }
+html { scroll-padding-top: var(--s5); }
+
+/* ---------- dlaczego warto: korzyści i kalkulator */
+.value { padding: 0 0 var(--s8); }
+.benefits { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s4); margin: var(--s5) 0; }
+.benefits article { padding: var(--s5); border-radius: var(--radius); background: var(--green-50); border: 1px solid var(--green-100); }
+.bn { font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ochre); }
+.benefits h3 { font-family: var(--serif); font-weight: 500; font-size: 21px; color: var(--green-900); margin: var(--s2) 0; }
+.benefits p { font-size: var(--fs-sm); color: var(--muted); }
+.calc { display: grid; gap: var(--s4); border-top: 4px solid var(--green); }
+.calc-head h3 { font-family: var(--serif); font-weight: 500; font-size: 24px; color: var(--green-900); margin: 0 0 var(--s1); }
+.calc-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s4); }
+.calc-in { display: grid; gap: 4px; font-size: var(--fs-sm); font-weight: 600; }
+.calc-in input { font: inherit; font-size: var(--fs-lg); font-weight: 700; padding: var(--s2) var(--s3); min-height: 48px; border: 1px solid #8c8470; border-radius: var(--radius-sm); background: var(--white); color: var(--ink); font-variant-numeric: tabular-nums; }
+.calc-in small { font-weight: 400; color: var(--ochre); }
+.cvals { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s4); }
+.cv { background: var(--paper); border-radius: var(--radius-sm); padding: var(--s4); border: 1px solid var(--line); }
+.cv b { display: block; font-family: var(--serif); font-weight: 600; font-size: 36px; line-height: 1.05; color: var(--green); font-variant-numeric: tabular-nums; }
+.cv .cu { display: block; font-weight: 700; font-size: var(--fs-sm); margin-top: 4px; }
+.cv p { font-size: var(--fs-xs); color: var(--muted); margin-top: var(--s2); }
+.costs { margin-top: var(--s4); padding: var(--s3) var(--s4); border-radius: var(--radius-sm); background: var(--ochre-100); color: #5c3e0b; font-size: var(--fs-sm); }
+.costs ul { margin: var(--s1) 0 0; padding-left: var(--s5); }
 
 /* ---------- stopka */
 .site-foot { max-width: 1360px; margin: var(--s8) auto 0; padding: var(--s6) var(--s6) var(--s8); border-top: 1px solid var(--line); display: grid; grid-template-columns: auto 1fr auto; gap: var(--s5); align-items: start; text-align: left; font-size: var(--fs-sm); color: var(--muted); }
@@ -330,6 +357,9 @@ details.more > summary { cursor: pointer; font-weight: 600; color: var(--green);
   .hero-card { padding: var(--s4); }
   .why { grid-template-columns: 1fr; gap: var(--s5); padding: var(--s6) 0; }
   .how-steps { grid-template-columns: 1fr; }
+  .benefits { grid-template-columns: 1fr; }
+  .calc-form { grid-template-columns: 1fr; }
+  .topnav { display: none; }
   .site-foot { grid-template-columns: 1fr; padding: var(--s5) var(--s4) var(--s6); }
   .summary .card.hl { grid-column: 1 / -1; }
   .setup { grid-template-columns: 1fr; }
@@ -343,14 +373,13 @@ details.more > summary { cursor: pointer; font-weight: 600; color: var(--green);
   .heat, .cal { min-width: 560px; }
 }
 @media (max-width: 640px) {
-  .top .demo { display: none; } /* na telefonie przykład otwiera przycisk na pierwszym ekranie */
   .why-facts { grid-template-columns: 1fr; }
   .fact { display: grid; grid-template-columns: auto 1fr; column-gap: var(--s3); align-items: baseline; }
   .fact p { grid-column: 1 / -1; margin-top: 0; }
   .yr { grid-template-columns: 70px 1fr 44px; }
 }
 @media print {
-  .top .demo, .top .lang, .hero, .sources, .why, .how, .tool-title, .setup, .tabs, footer, .noprint, .summary, .ask { display: none !important; }
+  .top .demo, .top .lang, .topnav, .hero, .sources, .why, .how, .value, .tool-title, .setup, .tabs, footer, .noprint, .summary, .ask { display: none !important; }
   body { background: var(--white); }
   [role=tabpanel] { display: none !important; }
   #tab-report { display: block !important; }

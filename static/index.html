@@ -29,8 +29,10 @@
     <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><circle cx="16" cy="16" r="7" fill="#2a6a43"/><ellipse cx="16" cy="16" rx="14" ry="5.5" fill="none" stroke="#b08a3e" stroke-width="2" transform="rotate(-25 16 16)"/></svg>
     <div><b>CropOrbit</b><span data-en="A crop rotation fitted to your field — from NASA satellite data">Płodozmian dopasowany do Twojego pola — z danych satelitarnych NASA</span></div>
   </div>
+  <nav class="topnav" aria-label="Sekcje strony" data-en-aria-label="Page sections">
+    <a href="#whyTitle" data-en="Problem">Problem</a><a href="#howTitle" data-en="How it works">Jak to działa</a><a href="#value" data-en="Why it pays">Dlaczego warto</a><a href="#toolTitle" data-en="Check your field">Sprawdź pole</a>
+  </nav>
   <div class="top-right">
-    <div class="demo" aria-label="Przykładowe pola" data-en-aria-label="Example fields"><span data-en="Example:">Przykład:</span> <span id="demoBtns"></span></div>
     <div class="lang" role="group" aria-label="Język / Language">
       <button type="button" data-lang="en" lang="en" aria-pressed="false">EN</button><button type="button" data-lang="pl" lang="pl" aria-pressed="false">PL</button>
     </div>
@@ -47,6 +49,7 @@
         <button type="button" class="primary" id="heroDemo" data-en="See an example: parcel Trzciana 723/1">Zobacz przykład: działka Trzciana 723/1</button>
         <a class="btn" href="#toolTitle" data-en="Analyse your own field ↓">Przeanalizuj swoje pole ↓</a>
       </div>
+      <div class="demo" aria-label="Przykładowe pola" data-en-aria-label="Example fields"><span data-en="All examples:">Wszystkie przykłady:</span> <span id="demoBtns"></span></div>
       <p id="staticNote" class="static-note" hidden></p>
     </div>
     <div class="hero-card" id="heroCard">
@@ -87,6 +90,27 @@
       <li><span class="how-n">03</span><h3 data-en="A rotation with evidence">Płodozmian z dowodami</h3>
         <p data-en="We score 20 crops and check thousands of rotations against agronomic rules. Each recommendation says why, what it gains, what it risks and the source of every number.">Oceniamy 20 upraw i sprawdzamy tysiące płodozmianów zgodnych z regułami agronomii. Każda rekomendacja mówi: dlaczego, co zyskasz, czym ryzykujesz i skąd jest każda liczba.</p></li>
     </ol>
+  </section>
+
+  <section class="value" id="value" aria-labelledby="valueTitle">
+    <p class="eyebrow" data-en="Why it pays off">Dlaczego warto</p>
+    <h2 id="valueTitle" class="section-title" data-en="What the farmer gets. <em>In numbers.</em>">Co rolnik z tego ma. <em>W liczbach.</em></h2>
+    <p class="section-lead" data-en="CropOrbit does not sell a hunch — it shows what changes on the field when the rotation changes, and how much it is worth on your farm.">CropOrbit nie sprzedaje przeczucia. Pokazuje, co zmienia się na polu, gdy zmienia się płodozmian, i ile to jest warte w Twoim gospodarstwie.</p>
+    <div class="benefits">
+      <article><span class="bn">01</span><h3 data-en="Less nitrogen fertiliser">Mniej nawozu azotowego</h3>
+        <p data-en="Legumes in the rotation (lupin, pea, faba bean) leave nitrogen for the next crop. Fertiliser is one of the biggest costs per hectare.">Bobowate w płodozmianie (łubin, groch, bobik) zostawiają azot następnej uprawie. Nawóz to jeden z największych kosztów na hektarze.</p></article>
+      <article><span class="bn">02</span><h3 data-en="The soil stays on the field">Gleba zostaje na polu</h3>
+        <p data-en="Fewer months of bare soil and lower erosion (RUSLE). Topsoil lost to a downpour does not come back — and with it go nutrients you paid for.">Mniej miesięcy gołej gleby i mniejsza erozja (RUSLE). Gleba zmyta przez ulewę nie wraca, a razem z nią odpływają składniki, za które zapłaciłeś.</p></article>
+      <article><span class="bn">03</span><h3 data-en="Humus grows instead of shrinking">Próchnica rośnie, a nie spada</h3>
+        <p data-en="A positive humus balance (VDLUFA) means soil that holds more water through drought and gives steadier yields — the field gains value.">Dodatni bilans próchnicy (VDLUFA) to gleba, która lepiej trzyma wodę w suszy i daje stabilniejsze plony. Pole zyskuje na wartości.</p></article>
+      <article><span class="bn">04</span><h3 data-en="Less weather risk">Mniej ryzyka pogodowego</h3>
+        <p data-en="Decisions based on 24 years, not the last season: frost “1 year in 10”, drought, heat. Fewer losses from sowing a crop the field cannot carry.">Decyzje na podstawie 24 lat, a nie ostatniego sezonu: przymrozek „1 rok na 10”, susza, upał. Mniej strat z siewu uprawy, której pole nie udźwignie.</p></article>
+      <article><span class="bn">05</span><h3 data-en="Ready for CAP rules">Pod zasady WPR i dopłaty</h3>
+        <p data-en="CAP conditionality and eco-schemes reward crop diversity, cover crops and legumes. The report helps plan this — check current rules and rates with ARiMR.">Warunkowość i ekoschematy WPR nagradzają zróżnicowanie upraw, międzyplony i bobowate. Raport pomaga to zaplanować; aktualne wymogi i stawki sprawdź w ARiMR.</p></article>
+      <article><span class="bn">06</span><h3 data-en="No equipment, no entry cost">Bez sprzętu i kosztów wejścia</h3>
+        <p data-en="No sensors, drones or sampling. A parcel number is enough; the printable report is ready for a talk with an ODR adviser.">Bez czujników, dronów i pobierania prób. Wystarczy numer działki, a raport do druku jest gotowy na rozmowę z doradcą ODR.</p></article>
+    </div>
+    <div class="card calc" id="landingCalc"></div>
   </section>
 
   <h2 class="section-title tool-title" id="toolTitle" data-en="Check <em>your field.</em>">Sprawdź <em>swoje pole.</em></h2>
@@ -160,12 +184,14 @@
       <button role="tab" id="t-crops" aria-controls="tab-crops" aria-selected="false" tabindex="-1" data-en="Crops">Uprawy</button>
       <button role="tab" id="t-rotations" aria-controls="tab-rotations" aria-selected="false" tabindex="-1" data-en="Rotations">Płodozmiany</button>
       <button role="tab" id="t-calendar" aria-controls="tab-calendar" aria-selected="false" tabindex="-1" data-en="Calendar">Kalendarz</button>
+      <button role="tab" id="t-value" aria-controls="tab-value" aria-selected="false" tabindex="-1" data-en="Is it worth it?">Opłacalność</button>
       <button role="tab" id="t-report" aria-controls="tab-report" aria-selected="false" tabindex="-1" data-en="Report">Raport</button>
     </div>
     <div role="tabpanel" id="tab-conditions" aria-labelledby="t-conditions" tabindex="0"></div>
     <div role="tabpanel" id="tab-crops" aria-labelledby="t-crops" tabindex="0" hidden></div>
     <div role="tabpanel" id="tab-rotations" aria-labelledby="t-rotations" tabindex="0" hidden></div>
     <div role="tabpanel" id="tab-calendar" aria-labelledby="t-calendar" tabindex="0" hidden></div>
+    <div role="tabpanel" id="tab-value" aria-labelledby="t-value" tabindex="0" hidden></div>
     <div role="tabpanel" id="tab-report" aria-labelledby="t-report" tabindex="0" hidden></div>
     <p class="note" style="margin-top:24px" data-en="This tool <b>supports, not replaces</b>, the farmer and the adviser. Every number comes from calculations on satellite data and models — each one shows its source and confidence.">Narzędzie <b>wspiera, a nie zastępuje</b> rolnika i doradcę. Każda liczba pochodzi z obliczeń na danych satelitarnych i modelach — przy każdej podajemy źródło i pewność.</p>
   </section>

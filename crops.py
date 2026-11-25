@@ -164,7 +164,7 @@ def fam(family):
 
 def public_list():
     return [{"id": c["id"], "name": cn(c), "family": c["family"],
-             "family_pl": fam(c["family"]), "winter": c["winter"]} for c in CROPS]
+             "family_pl": fam(c["family"]), "winter": c["winter"], "nfix": c["nfix"]} for c in CROPS]
 
 
 assert set(NAME_EN) == set(CROP_BY_ID) and set(NOTE_EN) <= {c["id"] for c in CROPS if c["note"]}

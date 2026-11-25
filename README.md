@@ -45,6 +45,16 @@ Sprawdzono 4650 wariantów płodozmianu. Najlepiej pasują: żyto ozime 100/100,
 
 ![Wyniki: rekomendacja, pytanie do AI i warunki na polu](docs/02-wynik.png)
 
+## Dlaczego to się rolnikowi opłaca
+
+Sekcja „Dlaczego warto” na stronie i zakładka **Opłacalność** w wynikach przeliczają analizę na korzyści gospodarstwa.
+Liczby pola (bobowate w płodozmianie, erozja, próchnica, goła gleba) pochodzą z analizy; cenę azotu i azot zostawiany
+przez bobowate rolnik wpisuje sam. Dla 10 ha i przykładowych założeń (5 zł/kg N, 40 kg N/ha) zmiana płodozmianu
+na działce Trzciana 723/1 daje ok. **400 zł rocznie mniej na nawozie**, **59 t gleby zatrzymanej na polu** i
+**+25 t próchnicy w 10 lat**. Obok korzyści aplikacja pokazuje koszty: wyższy deficyt wody upraw i nowe rynki zbytu.
+
+![Dlaczego warto: korzyści i kalkulator dla gospodarstwa](docs/05-dlaczego-warto.png)
+
 ![Działka wyszukana po numerze, z klasami gruntu z ewidencji](docs/03-dzialka.png)
 
 ## Jak uruchomić

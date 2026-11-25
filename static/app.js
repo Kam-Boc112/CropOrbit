@@ -281,7 +281,7 @@ $("#panel").addEventListener("submit", async (e) => {
 });
 
 // ================================================================== zakładki (ARIA, strzałki) i podpowiedzi
-const RENDER = { conditions: renderConditions, crops: renderCrops, rotations: renderRotations, calendar: renderCalendar, report: renderReport };
+const RENDER = { conditions: renderConditions, crops: renderCrops, rotations: renderRotations, calendar: renderCalendar, value: renderValue, report: renderReport };
 const tabs = $$("[role=tab]");
 function selectTab(tab, focus = false) {
   tabs.forEach((x) => { const on = x === tab; x.setAttribute("aria-selected", on); x.tabIndex = on ? 0 : -1; $("#" + x.getAttribute("aria-controls")).hidden = !on; });
@@ -369,6 +369,79 @@ function renderSummary(res) {
     en ? card(t("Najwięcej energii", "Most food energy"), esc(en.name), `${mkcal(en.kcal_ha)} ${t("mln kcal/ha", "M kcal/ha")} · ≈ ${fmt(en.persons_ha)} ${t("os./rok z 1 ha", "people/yr per ha")}`) : "",
     worst ? card(t("Na co uważać", "Watch out for"), esc(worst.title), esc(worst.value)) : card(t("Na co uważać", "Watch out for"), t("brak wyraźnych ryzyk", "no clear risks"), ""),
   ].join("");
+}
+
+// ---------------------------------------------------------- Opłacalność: wynik analizy przeliczony na korzyści gospodarstwa
+// Liczby pola (erozja, próchnica, bobowate, goła gleba) pochodzą z analizy; cena azotu i azot po bobowatych
+// to założenia, które rolnik wpisuje sam (pokazane jako pola do zmiany, zapamiętane w przeglądarce).
+const CALC_KEY = "croporbit-calc";
+function calcSaved() { try { return JSON.parse(localStorage.getItem(CALC_KEY) || "{}"); } catch { return {}; } }
+function renderCalc(el, res, { area, landing = false }) {
+  const best = bestStrategy(res), cur = res.new_field ? null : res.strategies[0];
+  if (!best) { el.innerHTML = ""; return; }
+  const nfix = new Set(state.crops.filter((c) => c.nfix).map((c) => c.id));
+  const legYr = (s) => s.seq.filter((id) => nfix.has(id)).length / s.seq.length;
+  const saved = calcSaved(), bdod = res.soil?.bdod || 1.4, p = landing ? "lc" : "tc";
+  const num = (id, v, step, label, hint) => `<label class="calc-in"><span>${label}</span>
+      <input id="${id}" type="number" inputmode="decimal" min="0" step="${step}" value="${v}"><small>${hint}</small></label>`;
+  el.innerHTML = `<div class="calc-head"><h3>${landing ? t("Policz dla swojego gospodarstwa", "Calculate for your farm") : t("Co daje zmiana płodozmianu na tym polu", "What changing the rotation gives on this field")}</h3>
+      <p class="small muted">${landing
+        ? t("Przeliczenie wyniku działki Trzciana 723/1 (obecny płodozmian → propozycja A) na hektary Twojego gospodarstwa. Dla własnego pola uruchom analizę — wynik w zakładce „Opłacalność”.",
+          "The result for parcel Trzciana 723/1 (current rotation → proposal A) scaled to the hectares of your farm. For your own field run the analysis — see the “Is it worth it?” tab.")
+        : res.new_field ? t(`Nowe pole: liczymy propozycję ${best.label} bez porównania z obecnym płodozmianem.`, `New field: we count proposal ${best.label} without comparing to a current rotation.`)
+        : t(`Obecny płodozmian → propozycja ${best.label}: ${best.names.join(" → ")}.`, `Current rotation → proposal ${best.label}: ${best.names.join(" → ")}.`)}</p></div>
+    <div class="calc-form">
+      ${num(p + "Area", landing ? (saved.area ?? 10) : fmt(area || 1, 2).replace(",", "."), "0.1", t("Powierzchnia [ha]", "Area [ha]"), landing ? t("Twoje grunty orne", "your arable land") : t("z zaznaczonych działek", "from the selected parcels"))}
+      ${num(p + "Price", saved.nPrice ?? 5, "0.1", t("Cena azotu [zł/kg N]", "Nitrogen price [PLN/kg N]"), t("przykład — wpisz aktualną", "example — enter the current one"))}
+      ${num(p + "Leg", saved.nLeg ?? 40, "5", t("Azot po bobowatych [kg N/ha]", "N left by legumes [kg N/ha]"), t("założenie — sprawdź z doradcą", "assumption — check with an adviser"))}
+    </div>
+    <div class="calc-out" aria-live="polite"></div>
+    <p class="note">${t("Kwoty to szacunek z wpisanych założeń. Erozja (RUSLE) i próchnica (VDLUFA) to modele — traktuj je jako kierunek i rząd wielkości, a decyzje sprawdź z doradcą.",
+      "Amounts are estimates from the assumptions entered. Erosion (RUSLE) and humus (VDLUFA) are models — treat them as direction and order of magnitude, and check decisions with an adviser.")}</p>`;
+  const out = $(".calc-out", el);
+  const update = () => {
+    const A = Math.max(0, +$("#" + p + "Area", el).value || 0), price = Math.max(0, +$("#" + p + "Price", el).value || 0), nLeg = Math.max(0, +$("#" + p + "Leg", el).value || 0);
+    try { localStorage.setItem(CALC_KEY, JSON.stringify({ ...calcSaved(), nPrice: price, nLeg, ...(landing ? { area: A } : {}) })); } catch { /* bez pamięci */ }
+    const legB = legYr(best), legC = cur ? legYr(cur) : 0;
+    const nKg = Math.max(0, legB - legC) * nLeg, zl = nKg * price * A;
+    const m = best.metrics, c = cur?.metrics;
+    const box = (big, unit, txt, cls = "") => `<div class="cv ${cls}"><b>${big}</b><span class="cu">${unit}</span><p>${txt}</p></div>`;
+    const items = [
+      box(`${fmt(zl, 0)} zł`, t("rocznie mniej na nawozie azotowym", "less spent on N fertiliser per year"),
+        t(`${fmt(legC, 2)} → ${fmt(legB, 2)} uprawy bobowatej na rok × ${fmt(nLeg, 0)} kg N/ha × ${fmt(price, 2)} zł × ${fmt(A, 1)} ha. W 10 lat: ${fmt(zl * 10, 0)} zł.`,
+          `${fmt(legC, 2)} → ${fmt(legB, 2)} legume crops per year × ${fmt(nLeg, 0)} kg N/ha × ${fmt(price, 2)} PLN × ${fmt(A, 1)} ha. Over 10 years: ${fmt(zl * 10, 0)} PLN.`)),
+    ];
+    if (c) {
+      const dE = c.erosion_t_ha - m.erosion_t_ha, dH = m.humus_kg_c - c.humus_kg_c;
+      items.push(
+        box(`${fmt(Math.max(0, dE) * 10 * A, 1)} t`, t("gleby zostaje na polu w 10 lat", "of soil stays on the field over 10 years"),
+          t(`Erozja ${fmt(c.erosion_t_ha, 2)} → ${fmt(m.erosion_t_ha, 2)} t/ha/rok. To ok. ${fmt(Math.max(0, dE) / bdod, 2)} mm warstwy ornej na każdym hektarze.`,
+            `Erosion ${fmt(c.erosion_t_ha, 2)} → ${fmt(m.erosion_t_ha, 2)} t/ha/yr. About ${fmt(Math.max(0, dE) / bdod, 2)} mm of topsoil on every hectare.`)),
+        box(`${dH >= 0 ? "+" : ""}${fmt(dH * 10 * 1.72 / 1000 * A, 1)} t`, t("próchnicy w glebie w 10 lat", "of humus in the soil over 10 years"),
+          t(`Bilans ${sgn(c.humus_kg_c)}${c.humus_kg_c} → ${sgn(m.humus_kg_c)}${m.humus_kg_c} kg C/ha/rok (VDLUFA), przeliczony na próchnicę (× 1,72).`,
+            `Balance ${sgn(c.humus_kg_c)}${c.humus_kg_c} → ${sgn(m.humus_kg_c)}${m.humus_kg_c} kg C/ha/yr (VDLUFA), converted to humus (× 1.72).`)),
+        box(`${fmt(c.bare_months)} → ${fmt(m.bare_months)}`, t("miesięcy gołej gleby w roku", "months of bare soil per year"),
+          t(`Udział zbóż ${c.cereal_share}% → ${m.cereal_share}%. Rodziny roślin: ${c.families} → ${m.families}, co przerywa cykle chorób.`,
+            `Cereal share ${c.cereal_share}% → ${m.cereal_share}%. Plant families: ${c.families} → ${m.families}, which breaks disease cycles.`)));
+    } else {
+      items.push(box(`${sgn(m.humus_kg_c)}${m.humus_kg_c}`, t("kg C/ha/rok — bilans próchnicy", "kg C/ha/yr — humus balance"), t("Model VDLUFA dla proponowanego płodozmianu.", "VDLUFA model for the proposed rotation.")),
+        box(`${fmt(m.bare_months)}`, t("miesięcy gołej gleby w roku", "months of bare soil per year"), t(`Erozja ${fmt(m.erosion_t_ha, 2)} t/ha/rok (RUSLE).`, `Erosion ${fmt(m.erosion_t_ha, 2)} t/ha/yr (RUSLE).`)));
+    }
+    const costs = c ? [
+      m.deficit_mm > c.deficit_mm && t(`Deficyt wody upraw rośnie: ${c.deficit_mm} → ${m.deficit_mm} mm w sezonie.`, `Crop water deficit rises: ${c.deficit_mm} → ${m.deficit_mm} mm per season.`),
+      best.axes.dochod < cur.axes.dochod && t(`Indeks dochodu spada: ${cur.axes.dochod} → ${best.axes.dochod} (względny, bez lokalnych cen).`, `Income index drops: ${cur.axes.dochod} → ${best.axes.dochod} (relative, no local prices).`),
+      t("Nowe uprawy to nowa technika i nowi odbiorcy — zaplanuj zbyt przed siewem.", "New crops mean new techniques and new buyers — plan sales before sowing."),
+    ].filter(Boolean) : [];
+    out.innerHTML = `<div class="cvals">${items.join("")}</div>
+      ${costs.length ? `<div class="costs"><b>${t("Uczciwie: co to kosztuje", "Honestly: what it costs")}</b><ul>${costs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}`;
+  };
+  $$("input", el).forEach((i) => i.addEventListener("input", update));
+  update();
+}
+function renderValue(res) { renderCalc($("#tab-value"), res, { area: res.field.area_ha }); }
+async function renderLandingCalc() {
+  try { renderCalc($("#landingCalc"), await snap(`trzciana.${LANG}.json`), { landing: true }); }
+  catch { $("#landingCalc").hidden = true; }
 }
 
 // ---------------------------------------------------------- „Zapytaj o swoje pole” (Claude, tylko z liczb analizy)
@@ -758,6 +831,7 @@ async function renderWhy() {
   $("#heroDemo").onclick = () => openDemo(state.demos.find((d) => d.id === "trzciana") || state.demos[0]);
   renderHeroStats();
   renderWhy();
+  renderLandingCalc();
   // link bezpośrednio do wyniku przykładu, np. ?demo=trzciana (do README i zgłoszeń)
   const linked = state.demos.find((d) => d.id === new URLSearchParams(location.search).get("demo"));
   if (linked && !sessionStorage.getItem(RESTORE_KEY)) {
