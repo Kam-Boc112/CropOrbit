@@ -56,7 +56,7 @@ let engine = null, engineSeq = 0, engineReady = false;
 const enginePending = new Map();
 function engineCall(fn, args) {
   if (!engine) {
-    engine = new Worker("engine.js");
+    engine = new Worker("engine.js?v=20261125c");
     engine.onmessage = ({ data }) => {
       const p = enginePending.get(data.id); if (!p) return;
       enginePending.delete(data.id); engineReady = true;

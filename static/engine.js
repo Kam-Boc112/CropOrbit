@@ -18,7 +18,7 @@ async function boot() {
   py = await loadPyodide();
   py.FS.mkdirTree("/app");
   for (const m of MODULES) {
-    const r = await fetch(`py/${m}.py`);
+    const r = await fetch(`py/${m}.py?v=${new URL(self.location.href).searchParams.get("v") || ""}`); // ta sama wersja co strona
     if (!r.ok) throw new Error(`py/${m}.py: HTTP ${r.status}`);
     py.FS.writeFile(`/app/${m}.py`, await r.text());
   }
