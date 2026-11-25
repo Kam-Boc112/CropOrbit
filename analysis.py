@@ -9,7 +9,7 @@ import agro
 import parcels as parcels_mod
 import rotation
 from crops import CROP_BY_ID, CROPS, cn
-from data_sources import fetch_all
+from data_sources import IN_BROWSER, fetch_all
 from i18n import tr
 
 
@@ -17,7 +17,8 @@ def sources():
     return {
         "power": tr("NASA POWER (MERRA‑2/CERES, dziennie)", "NASA POWER (MERRA‑2/CERES, daily)"),
         "soil": "SoilGrids 2.0 (ISRIC, 250 m)",
-        "srtm": tr("SRTM 30 m (NASA/USGS, przez OpenTopoData)", "SRTM 30 m (NASA/USGS, via OpenTopoData)"),
+        "srtm": (tr("Copernicus DEM 90 m (przez Open-Meteo; wersja przeglądarkowa)", "Copernicus DEM 90 m (via Open-Meteo; browser version)")
+                 if IN_BROWSER else tr("SRTM 30 m (NASA/USGS, przez OpenTopoData)", "SRTM 30 m (NASA/USGS, via OpenTopoData)")),
         "ndvi": "MODIS MOD13Q1 NDVI 250 m (NASA, ORNL DAAC)",
         "egib": tr("EGiB — kontury klasyfikacyjne (GUGiK: ULDK + Krajowa Integracja Ewidencji Gruntów)",
                    "EGiB land register — soil class contours (GUGiK: ULDK + National Land Register Integration)"),

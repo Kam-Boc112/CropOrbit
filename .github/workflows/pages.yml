@@ -1,5 +1,5 @@
-# Wersja pokazowa na GitHub Pages: sam folder static/ (bez serwera Pythona).
-# Pola przykładowe działają od ręki z gotowych wyników w static/demo/; własne pole wymaga pełnej wersji.
+# Wersja na GitHub Pages bez serwera: folder static/ + moduły Pythona w py/.
+# Pola przykładowe działają od ręki (static/demo/); własne pole liczy engine.js — ten sam Python w Pyodide (WebAssembly).
 # Włączenie: Settings → Pages → Source: GitHub Actions (repozytorium musi być publiczne na darmowym planie).
 name: Demo na GitHub Pages
 
@@ -25,9 +25,14 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true  # włącza Pages przy pierwszym wdrożeniu, jeśli jeszcze nie są włączone
+      - name: Złóż stronę (static/ + moduły Pythona dla silnika w przeglądarce)
+        run: |
+          mkdir -p _site/py
+          cp -r static/. _site/
+          cp i18n.py crops.py agro.py data_sources.py parcels.py rotation.py analysis.py _site/py/
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: static
+          path: _site
 
   deploy:
     needs: build

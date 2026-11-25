@@ -50,7 +50,42 @@ const stratShort = (s) => (s.is_current ? t("Ob.", "Now") : s.label);
 const stratName = (s) => (s.is_current ? t("Obecny", "Current") : s.label);
 // dwa przyciski „Analizuj” (pod mapą na komputerze, pod formularzem na telefonie) — widoczny jest zawsze jeden
 function status(msg, err = false) { $$(".status").forEach((s) => { s.textContent = msg; s.classList.toggle("err", err); }); }
+// ---------------------------------------------------------- silnik w przeglądarce (bez serwera, np. GitHub Pages)
+// Te same moduły Pythona co na serwerze, uruchomione w Pyodide w Web Workerze (engine.js).
+let engine = null, engineSeq = 0, engineReady = false;
+const enginePending = new Map();
+function engineCall(fn, args) {
+  if (!engine) {
+    engine = new Worker("engine.js");
+    engine.onmessage = ({ data }) => {
+      const p = enginePending.get(data.id); if (!p) return;
+      enginePending.delete(data.id); engineReady = true;
+      data.ok ? p.resolve(data.data) : p.reject(new Error(data.error));
+    };
+    engine.onerror = (e) => { enginePending.forEach((p) => p.reject(new Error(e.message || "engine error"))); enginePending.clear(); };
+  }
+  if (!engineReady) status(t("Uruchamiam silnik obliczeń w przeglądarce (Python, ok. 15 MB — tylko za pierwszym razem)…",
+    "Starting the in-browser analysis engine (Python, ~15 MB — first time only)…"));
+  return new Promise((resolve, reject) => {
+    const id = ++engineSeq;
+    enginePending.set(id, { resolve, reject });
+    engine.postMessage({ id, fn, args, lang: LANG });
+  });
+}
+async function staticApi(url, opts) {
+  const u = new URL(url, location.origin), q = Object.fromEntries(u.searchParams);
+  const notFound = () => { const e = new Error(t("brak działki w tym miejscu", "no parcel at this spot")); e.code = 404; throw e; };
+  if (u.pathname === "/api/analyze") return engineCall("analyze", JSON.parse(opts.body));
+  if (u.pathname === "/api/parcel") {
+    if (q.q) return engineCall("parcel_search", { q: q.q });
+    const r = q.id ? await engineCall("parcel_id", { id: q.id }) : await engineCall("parcel_point", { lat: q.lat, lon: q.lon });
+    return r || notFound();
+  }
+  const e = new Error(t("Ta funkcja działa tylko z serwerem.", "This feature needs the server.")); e.code = 503; throw e;
+}
+
 async function getJSON(url, opts) {
+  if (STATIC && url.startsWith("/api/")) return staticApi(url, opts);
   if (url.startsWith("/api/")) url += (url.includes("?") ? "&" : "?") + "lang=" + LANG;
   const r = await fetch(url, opts);
   const d = await r.json().catch(() => ({}));
@@ -88,7 +123,9 @@ function switchLang(lang) {
   const u = new URL(location.href);
   u.searchParams.delete("lang"); u.searchParams.delete("demo");
   if (!localStorageOk()) u.searchParams.set("lang", lang);
-  location.replace(u.toString());
+  u.hash = ""; // adres z samą zmianą kotwicy (#…) nie przeładowałby strony
+  history.replaceState(null, "", u.toString());
+  location.reload();
 }
 applyStaticLang();
 
@@ -251,11 +288,6 @@ $("#livestock").onchange = (e) => { if (e.target.checked && $("#w_pasza").value 
 const analyzeLabel = t("Analizuj pole", "Analyse field");
 $("#panel").addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (STATIC) {
-    status(t("To wersja pokazowa bez serwera: działają pola przykładowe. Analiza własnego pola wymaga pełnej wersji (python server.py).",
-      "This is the demo version without a server: the example fields work. Analysing your own field needs the full version (python server.py)."), true);
-    return;
-  }
   const g = fieldGeom();
   if (!g) { status(t("Najpierw wskaż pole na mapie albo wyszukaj działkę.", "First mark the field on the map or search for a parcel."), true); return $("#searchInput").focus(); }
   const newField = $("#newField").checked;
@@ -268,7 +300,9 @@ $("#panel").addEventListener("submit", async (e) => {
   const btns = $$(".analyze"), label = (txt) => btns.forEach((b) => { b.textContent = txt; });
   btns.forEach((b) => { b.disabled = true; });
   const t0 = Date.now();
-  status(t("Pobieram dane NASA (24 lata), teren, glebę… Pierwsza analiza nowego pola trwa do ok. 40 s.",
+  status(STATIC ? t("Liczę w przeglądarce: pobieram 24 lata danych NASA, teren i glebę… To trwa ok. 30–90 s.",
+    "Computing in your browser: downloading 24 years of NASA data, terrain and soil… This takes ~30–90 s.")
+    : t("Pobieram dane NASA (24 lata), teren, glebę… Pierwsza analiza nowego pola trwa do ok. 40 s.",
     "Downloading NASA data (24 years), terrain and soil… The first analysis of a new field takes up to ~40 s."));
   const tick = setInterval(() => { label(`${t("Analizuję…", "Analysing…")} ${Math.round((Date.now() - t0) / 1000)} s`); }, 1000);
   try {
@@ -486,8 +520,9 @@ function renderAsk(res) {
   $$(".chip-btn", el).forEach((b) => b.onclick = () => { input.value = b.textContent; send(b.textContent); });
 }
 
+const ndviSkipped = (res) => /pominięte/.test(res.errors?.ndvi || ""); // wersja przeglądarkowa celowo pomija NDVI
 function renderConditions(res) {
-  const ind = res.climate.ind, errs = Object.keys(res.errors || {});
+  const ind = res.climate.ind, errs = Object.keys(res.errors || {}).filter((k) => !ndviSkipped(res) || k !== "ndvi");
   const el = $("#tab-conditions");
   el.innerHTML = `
     ${errs.length ? `<div class="warnbox">${t(`Niektóre źródła nie odpowiedziały (${errs.map(esc).join(", ")}). Tam, gdzie to potrzebne, analiza użyła wartości zastępczych i opisała to w „lukach w danych”.`,
@@ -575,6 +610,8 @@ function renderCalendar(res) {
       <div class="card"><h3>${t("Z satelity: zieleń pola (NDVI, MODIS)", "From satellite: field greenness (NDVI, MODIS)")} ${gloss(res, ["NDVI"])}</h3>
         ${nd ? `<div class="chartbox"><canvas id="cNdvi"></canvas></div>
           <p class="small" style="margin-top:8px">${t("Okresy z NDVI", "Periods with NDVI")} &lt; ${nd.threshold} (${t("zwykle goła gleba", "usually bare soil")}): ${nd.bare_windows.map((w) => `${w.from}–${w.to}`).join(", ") || t("brak", "none")}. ${esc(res.ndvi_note || "")}</p>`
+        : ndviSkipped(res) ? `<p class="muted small">${t("W wersji liczonej w przeglądarce pomijamy profil NDVI z MODIS (9 zapytań, ok. 45 s). Okresy gołej gleby pokazujemy z modelu kalendarza upraw (obok); pełna wersja z serwerem pobiera też NDVI.",
+          "The in-browser version skips the MODIS NDVI profile (9 requests, ~45 s). Bare-soil periods come from the crop calendar model (next to this); the full server version also downloads NDVI.")}</p>`
         : `<p class="muted small">${t("Serwis MODIS (ORNL DAAC) nie odpowiedział — okresy gołej gleby pokazujemy z modelu kalendarza upraw (obok). Po udanym pobraniu dane trafią do pamięci podręcznej.",
           "The MODIS service (ORNL DAAC) did not respond — bare-soil periods are shown from the crop calendar model (next to this). Once downloaded, the data are cached.")}</p>`}
       </div>
@@ -821,8 +858,8 @@ async function renderWhy() {
     state.demos = await snap(`demo.${LANG}.json`);
     const note = $("#staticNote");
     note.hidden = false;
-    note.textContent = t("Wersja pokazowa: pola przykładowe otwierają się od razu. Własne pole policzysz w pełnej wersji (python server.py).",
-      "Demo version: the example fields open instantly. Your own field is analysed in the full version (python server.py).");
+    note.textContent = t("Wersja bez serwera: przykłady otwierają się od razu, a własne pole liczy się w Twojej przeglądarce (ten sam kod w Pythonie, uruchomiony w WebAssembly).",
+      "Serverless version: examples open instantly and your own field is computed in your browser (the same Python code, running in WebAssembly).");
   }
   $("#cropSelect").innerHTML = state.crops.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
   renderChips();

@@ -7,9 +7,8 @@
 import html
 import re
 import urllib.parse
-import urllib.request
 
-from data_sources import UA, _cached
+from data_sources import _cached, http_bytes
 from i18n import tr
 
 ULDK = "https://uldk.gugik.gov.pl/"
@@ -46,9 +45,7 @@ def in_poland(lat, lon):
 
 
 def _get_text(url, timeout=40):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        raw = r.read()
+    raw = http_bytes(url, timeout)  # serwer: urllib; przeglądarka (Pyodide): XHR
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError:

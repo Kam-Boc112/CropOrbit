@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import os
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -15,15 +16,34 @@ CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 UA = "CropOrbit/0.1 (NASA Space Apps prototype)"
 _FAIL_UNTIL = {}  # źródło → znacznik czasu; nie czekamy wielokrotnie na niedziałający serwis
 
+# Wersja przeglądarkowa: ten sam kod działa w Pyodide (Python w WebAssembly) w Web Workerze na GitHub Pages.
+# Tam nie ma wątków ani urllib z siecią — zapytania idą synchronicznym XMLHttpRequest, po kolei.
+IN_BROWSER = sys.platform == "emscripten"
+
 POWER_START, POWER_END = 2001, 2024
 POWER_PARAMS = ["T2M_MAX", "T2M_MIN", "T2M", "RH2M", "WS2M",
                 "ALLSKY_SFC_SW_DWN", "PRECTOTCORR", "GWETROOT", "GWETTOP", "SNODP"]
 
 
-def _get_json(url, timeout=120):
+def http_bytes(url, timeout=120):
+    """Surowe bajty odpowiedzi (serwer: urllib; przeglądarka: synchroniczny XHR w Web Workerze)."""
+    if IN_BROWSER:
+        from js import XMLHttpRequest  # dostępne tylko w Pyodide
+        x = XMLHttpRequest.new()
+        x.open("GET", url, False)
+        x.timeout = int(timeout * 1000)
+        x.overrideMimeType("text/plain; charset=x-user-defined")  # bajty bez dekodowania (KIEG nadaje w cp1250)
+        x.send(None)
+        if not 200 <= x.status < 300:
+            raise OSError(f"HTTP {x.status}")
+        return bytes(ord(c) & 0xFF for c in x.responseText)
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode("utf-8"))
+        return r.read()
+
+
+def _get_json(url, timeout=120):
+    return json.loads(http_bytes(url, timeout).decode("utf-8"))
 
 
 COOLDOWN_MSG = "źródło niedostępne (ponowna próba za kilka minut)"
@@ -102,9 +122,14 @@ def fetch_terrain(lat, lon, step_m=60):
         dlat = step_m / 111320.0
         dlon = step_m / (111320.0 * math.cos(math.radians(lat)))
         pts = [(lat + r * dlat, lon + c * dlon) for r in (1, 0, -1) for c in (-1, 0, 1)]
-        locs = "|".join(f"{a:.6f},{b:.6f}" for a, b in pts)
-        d = _get_json("https://api.opentopodata.org/v1/srtm30m?locations=" + locs, timeout=60)
-        z = [r["elevation"] for r in d["results"]]
+        if IN_BROWSER:  # OpenTopoData nie pozwala na zapytania ze stron (CORS) — Copernicus DEM przez Open-Meteo
+            q = urllib.parse.urlencode({"latitude": ",".join(f"{a:.6f}" for a, _ in pts),
+                                        "longitude": ",".join(f"{b:.6f}" for _, b in pts)})
+            z = _get_json("https://api.open-meteo.com/v1/elevation?" + q, timeout=60)["elevation"]
+        else:
+            locs = "|".join(f"{a:.6f},{b:.6f}" for a, b in pts)
+            d = _get_json("https://api.opentopodata.org/v1/srtm30m?locations=" + locs, timeout=60)
+            z = [r["elevation"] for r in d["results"]]
         if any(v is None for v in z):
             return {"elev": z[4], "slope_pct": None, "aspect": None}
         a, b, c, dd, e, f, g, h, i = z
@@ -115,7 +140,7 @@ def fetch_terrain(lat, lon, step_m=60):
         return {"elev": e, "slope_pct": round(slope, 2), "aspect": round(aspect),
                 "relief_m": round(max(z) - min(z), 1)}
 
-    return _cached(f"srtm:{lat}:{lon}:{step_m}", go)
+    return _cached(f"{'cop90' if IN_BROWSER else 'srtm'}:{lat}:{lon}:{step_m}", go)
 
 
 # ---------------------------------------------------------------- MODIS NDVI
@@ -157,6 +182,17 @@ def fetch_all(lat, lon):
     tasks = {"power": fetch_power, "soil": fetch_soil, "terrain": fetch_terrain, "ndvi": fetch_ndvi}
     limits = {"power": 240, "soil": 70, "terrain": 70, "ndvi": 25}  # NDVI jest opcjonalne
     out, errors = {}, {}
+    if IN_BROWSER:  # bez wątków: źródła po kolei; NDVI (9 zapytań, ~45 s) pomijamy, kalendarz liczy model upraw
+        for k, fn in tasks.items():
+            if k == "ndvi":
+                out[k], errors[k] = None, "pominięte w wersji przeglądarkowej (przyspiesza analizę)"
+                continue
+            try:
+                out[k] = fn(lat, lon)
+            except Exception as e:  # noqa: BLE001
+                out[k], errors[k] = None, f"{type(e).__name__}: {e}"[:200]
+        out["errors"] = errors
+        return out
     now = time.time()
     ex = cf.ThreadPoolExecutor(max_workers=4)
     futs = {}
